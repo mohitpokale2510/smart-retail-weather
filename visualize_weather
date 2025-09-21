@@ -1,0 +1,18 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sqlalchemy import create_engine
+
+DATABASE_URL = "postgresql+psycopg2://postgres:1234567@localhost:5432/weather_db"
+CITY = "Mumbai"
+
+engine = create_engine(DATABASE_URL)
+df = pd.read_sql(f"SELECT * FROM weather_data WHERE city='{CITY}';", engine)
+
+plt.plot(df['timestamp'], df['temperature_c'], label="Temperature (°C)")
+plt.plot(df['timestamp'], df['relative_humidity'], label="Humidity (%)")
+plt.xlabel("Date")
+plt.ylabel("Values")
+plt.title(f"{CITY} Weather Trends - Last 30 Days")
+plt.legend()
+plt.savefig("weather_trends.png")
+plt.show()

@@ -1,0 +1,73 @@
+import requests
+import pandas as pd
+from sqlalchemy import create_engine
+import datetime
+
+# ---------- CONFIG ----------
+CITY = "Mumbai"  
+DATABASE_URL = "postgresql+psycopg2://postgres:1234567@localhost:5432/weather_db"
+DAYS = 30
+# ---------- END CONFIG -------
+
+def geocode(city):
+    """Get latitude and longitude of a city using Open-Meteo geocoding API"""
+    url = "https://geocoding-api.open-meteo.com/v1/search"
+    params = {"name": city, "count": 1}
+    r = requests.get(url, params=params)
+    res = r.json()["results"][0]
+    return res["name"], res["latitude"], res["longitude"], res["timezone"]
+
+def fetch_history(lat, lon, start, end, tz):
+    """Fetch historical hourly weather data for the given lat/lon"""
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start,
+        "end_date": end,
+        "hourly": "temperature_2m,relative_humidity_2m,precipitation,weathercode,windspeed_10m",
+        "timezone": tz
+    }
+    r = requests.get(url, params=params)
+    return r.json()
+
+def main():
+    # Step 1: Get city coordinates
+    name, lat, lon, tz = geocode(CITY)
+
+    # Step 2: Get last 30 days date range
+    today = datetime.date.today()
+    end = today - datetime.timedelta(days=1)
+    start = end - datetime.timedelta(days=DAYS-1)
+
+    print(f"Fetching data for {CITY} from {start} to {end}")
+
+    # Step 3: Fetch data from Open-Meteo API
+    data = fetch_history(lat, lon, start.isoformat(), end.isoformat(), tz)
+
+    # Step 4: Convert to DataFrame
+    df = pd.DataFrame(data["hourly"])
+    df = df.rename(columns={
+        "time": "timestamp",
+        "temperature_2m": "temperature_c",
+        "relative_humidity_2m": "relative_humidity",
+        "precipitation": "precipitation_mm",
+        "weathercode": "weather_code",
+        "windspeed_10m": "windspeed_10m"
+    })
+    df["city"] = CITY
+    df["latitude"] = lat
+    df["longitude"] = lon
+    df["timezone"] = tz
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # Step 5: Save to PostgreSQL
+    engine = create_engine(DATABASE_URL)
+    df.to_sql("weather_data", engine, if_exists="append", index=False)
+
+    print(f"Inserted {len(df)} rows into weather_data")
+    print(data["hourly"])
+
+
+if __name__ == "__main__":
+    main()

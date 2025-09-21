@@ -1,0 +1,45 @@
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sqlalchemy import create_engine
+import matplotlib.pyplot as plt
+
+DATABASE_URL = "postgresql+psycopg2://postgres:1234567@localhost:5432/weather_db"
+CITY = "Mumbai"
+
+# Database connection and data fetching
+engine = create_engine(DATABASE_URL)
+df = pd.read_sql(f"SELECT * FROM weather_data WHERE city='{CITY}';", engine)
+
+df = df.dropna(subset=['temperature_c']).reset_index(drop=True)
+
+# Ensure 'timestamp' is in datetime format
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+# For plotting and regression
+df['day'] = np.arange(len(df))
+X = df[['day']]
+y = df['temperature_c']
+
+# Linear regression
+model = LinearRegression()
+model.fit(X, y)
+
+# Future predictions: next 7 days
+future_days = np.arange(len(df), len(df) + 7)
+future_dates = df['timestamp'].iloc[-1] + pd.to_timedelta(np.arange(1,8), unit='d')
+forecast = model.predict(future_days.reshape(-1, 1))
+
+# Plotting
+plt.figure(figsize=(10,6))
+plt.plot(df['timestamp'], y, label="Actual Temperature", color='tab:blue')
+plt.scatter(future_dates, forecast, color='orange', label="Forecasted Temperature")
+plt.title("Temperature Forecast - Next 7 Days")
+plt.xlabel("Date")
+plt.ylabel("Temperature (°C)")
+plt.legend()
+plt.xticks(rotation=30)
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("forecast.png")
+plt.show()
